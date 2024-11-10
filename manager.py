@@ -1,5 +1,5 @@
 import argon2
-import json, hashlib, getpass, os, pyperclip, sys, secrets, string
+import json, getpass, os, pyperclip, sys, secrets, string
 from cryptography.fernet import Fernet
 from argon2 import PasswordHasher
 
@@ -12,7 +12,6 @@ ph = PasswordHasher(time_cost=1, memory_cost=47104, parallelism=1, hash_len=32, 
 character_set = string.ascii_letters + string.digits + string.punctuation
 
 ### Encryption and Decryption ###
-
 
 # Generates a secret key that can be used to encrypt password when added to the system and then decrypt when retrieving 
 def generate_key():
@@ -38,7 +37,7 @@ def generate_salt():
 
 # Returns a pepper
 def generate_pepper():
-    return secrets.choice(string.ascii_letters + string.digits + string.punctuation)
+    return secrets.choice(character_set)
 
 # Given the stored password hash and entered password (including the salt already), iterating through all possible peppers
 # to check for a match
@@ -52,14 +51,43 @@ def verify_with_pepper(entered_password, stored_password_hash):
     return False
 
 
+# check before salt and pepper is added
+def password_vulnerabilities_check(username, password):
+    vulnerabilities = []
+
+    if username == password:
+        vulnerabilities.append("- Password is the same as username")
+    if len(password) < 8:
+        vulnerabilities.append("- Password length is less than 8")
+    with open("PwnedPasswordsTop100k.txt") as f:
+        common_passwords = f.read().splitlines()
+        if password in common_passwords:
+            index = common_passwords.index(password)
+            # check if within top 200 used passwords
+            if index < 200:
+                vulnerabilities.append("- Password is in top 200 most common passwords")
+    
+    f.close()
+
+    return vulnerabilities
 
 
+
+### Features on Password Manager ###
 # Registers the admin of this system and the master password
 def register(username, master_password):
     # Generate a salt to append
     salt = generate_salt()
     # Generate a pepper to append
     pepper = generate_pepper()
+
+    issues = password_vulnerabilities_check(username, master_password)
+    if len(issues) > 0:
+        print('\nWARNING --- your inputted password has the following vulnerabilities\n')
+        for line in issues:
+            print(line)
+        print('\nAborting....\n')
+        return
     # uses argon2 to hash the master password
     hashed_master_password = ph.hash(master_password + salt + pepper)
     user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt}
