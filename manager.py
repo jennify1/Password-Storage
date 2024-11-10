@@ -166,7 +166,7 @@ while True:
        else:
             username = input("Enter your username: ")
             master_password = getpass.getpass("Enter your master password: ")
-            password_match = getpass.getpass("Enter in your master password again: ")
+            password_match = getpass.getpass("Confirm your master password: ")
             if (master_password != password_match):
                print('\n[-] Passwords do not match. Please try again.\n')
             else:
