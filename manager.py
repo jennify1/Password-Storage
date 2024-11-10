@@ -1,14 +1,19 @@
+import argon2
 import json, hashlib, getpass, os, pyperclip, sys, secrets, string
 from cryptography.fernet import Fernet
+from argon2 import PasswordHasher
 
+
+### Initialise a PasswordHasher using argon2 ###
+ph = PasswordHasher(time_cost=1, memory_cost=47104, parallelism=1, hash_len=32, salt_len=16, type=argon2.Type.ID)
 
 ### Encryption and Decryption ###
 
 # Function hashes master password
-def hash_password(password):
-   sha256 = hashlib.sha256()
-   sha256.update(password.encode())
-   return sha256.hexdigest()
+# def hash_password(password):
+#    sha256 = hashlib.sha256()
+#    sha256.update(password.encode())
+#    return sha256.hexdigest()
 
 
 # Generates a secret key that can be used to encrypt password when added to the system and then decrypt when retrieving 
@@ -18,6 +23,8 @@ def generate_key():
 # Initialises a Fernet cipher using the provided key
 def initialize_cipher(key):
    return Fernet(key)
+
+
 
 # Encrypts a password using a provided cipher
 def encrypt_password(cipher, password):
@@ -29,11 +36,19 @@ def decrypt_password(cipher, encrypted_password):
    return cipher.decrypt(encrypted_password.encode()).decode()
 
 
+# Returns a string of a salt
+def generate_salt():
+    return ''.join(secrets.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(16))
+
+
+
 # Registers the admin of this system and the master password
 def register(username, master_password):
    # Encrypt the master password before storing it
    salt = generate_salt()
-   hashed_master_password = hash_password(master_password + salt)
+   # uses argon2 to hash the master password
+   hashed_master_password = ph.hash(master_password + salt)
+   #hashed_master_password = hash_password(master_password + salt)
    user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt}
    file_name = 'user_data.json'
    if os.path.exists(file_name) and os.path.getsize(file_name) == 0:
@@ -48,17 +63,21 @@ def register(username, master_password):
 
 # Takes in a username and password and attempts to log in
 def login(username, entered_password):
-   try:
+    try:
        with open('user_data.json', 'r') as file:
            user_data = json.load(file)
        stored_password_hash = user_data.get('master_password')
-       entered_password_hash = hash_password(entered_password + user_data.get('salt'))
-       if entered_password_hash == stored_password_hash and username == user_data.get('username'):
+       #entered_password_hash = hash_password(entered_password + user_data.get('salt'))
+       if ph.verify(stored_password_hash, entered_password + user_data.get('salt')) and username == user_data.get('username'):
+       #if entered_password_hash == stored_password_hash and username == user_data.get('username'):
            print("\n[+] Login Successful..\n")
        else:
            print("\n[-] Invalid Login credentials. Please use the credentials you used to register.\n")
            sys.exit()
-   except Exception:
+    except argon2.exceptions.VerifyMismatchError:
+        print("\n[-] Invalid Login credentials. Please use the credentials you used to register.\n")
+        sys.exit()
+    except Exception:
        print("\n[-] You have not registered. Please do that.\n")
        sys.exit()
 
@@ -187,9 +206,3 @@ while True:
    elif choice == '3':  # If a user wants to quit the program
        break
    
-
-# Returns a string of a salt
-def generate_salt():
-    return ''.join(secrets.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(16))
-
-
