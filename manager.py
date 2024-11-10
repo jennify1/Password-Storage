@@ -1,7 +1,8 @@
-import json, hashlib, getpass, os, pyperclip, sys
+import json, hashlib, getpass, os, pyperclip, sys, secrets, string
 from cryptography.fernet import Fernet
 
 
+### Encryption and Decryption ###
 
 # Function hashes master password
 def hash_password(password):
@@ -20,6 +21,7 @@ def initialize_cipher(key):
 
 # Encrypts a password using a provided cipher
 def encrypt_password(cipher, password):
+   
    return cipher.encrypt(password.encode()).decode()
 
 # Decrypts a password
@@ -30,8 +32,9 @@ def decrypt_password(cipher, encrypted_password):
 # Registers the admin of this system and the master password
 def register(username, master_password):
    # Encrypt the master password before storing it
-   hashed_master_password = hash_password(master_password)
-   user_data = {'username': username, 'master_password': hashed_master_password}
+   salt = generate_salt()
+   hashed_master_password = hash_password(master_password + salt)
+   user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt}
    file_name = 'user_data.json'
    if os.path.exists(file_name) and os.path.getsize(file_name) == 0:
        with open(file_name, 'w') as file:
@@ -49,7 +52,7 @@ def login(username, entered_password):
        with open('user_data.json', 'r') as file:
            user_data = json.load(file)
        stored_password_hash = user_data.get('master_password')
-       entered_password_hash = hash_password(entered_password)
+       entered_password_hash = hash_password(entered_password + user_data.get('salt'))
        if entered_password_hash == stored_password_hash and username == user_data.get('username'):
            print("\n[+] Login Successful..\n")
        else:
@@ -183,3 +186,10 @@ while True:
                break
    elif choice == '3':  # If a user wants to quit the program
        break
+   
+
+# Returns a string of a salt
+def generate_salt():
+    return ''.join(secrets.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(16))
+
+
