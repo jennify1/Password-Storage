@@ -164,9 +164,13 @@ while True:
            print("\n[-] Master user already exists!!")
            sys.exit()
        else:
-           username = input("Enter your username: ")
-           master_password = getpass.getpass("Enter your master password: ")
-           register(username, master_password)
+            username = input("Enter your username: ")
+            master_password = getpass.getpass("Enter your master password: ")
+            password_match = getpass.getpass("Enter in your master password again: ")
+            if (master_password != password_match):
+               print('\n[-] Passwords do not match. Please try again.\n')
+            else:
+                register(username, master_password)
    elif choice == '2':  # If a User wants to log in
        file = 'user_data.json'
        if os.path.exists(file):
