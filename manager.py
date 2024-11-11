@@ -72,6 +72,7 @@ def encrypt_rsa_password(public, password):
         ),
     )
 
+
 # Returns a string of a salt
 def generate_salt():
     return ''.join(secrets.choice(character_set) for _ in range(16))
@@ -98,6 +99,7 @@ def email_2fa_authentication():
     totp_code = totp.now()
 
     # send the email containing this totp
+    print('A one time use code will be sent to the email you provided at registration')
     send_email(totp_code)
     user_code = input('Enter the code provided in your email: ')
 
@@ -106,7 +108,6 @@ def email_2fa_authentication():
         print('The code you provided was incorrect.')
         return False
     else:
-        print('Correct!')
         return True
 
 def send_email(code):
@@ -126,6 +127,22 @@ def send_email(code):
     s.send_message(msg)
     s.quit()
 
+
+def increment_incorrect_attempts():
+    attempts = get_incorrect_attempts()
+    set_incorrect_attempts(attempts + 1)
+
+def get_incorrect_attempts():
+    with open(USER_FILE, 'r') as file:
+        user_data = json.load(file)
+    return user_data.get('incorrect_attempts')
+
+def set_incorrect_attempts(num):
+    with open(USER_FILE, 'r') as file:
+        user_data = json.load(file)
+    user_data['incorrect_attempts'] = num
+    with open(USER_FILE, 'w') as file:
+        json.dump(user_data, file, indent=4)
 
 ### Features on Password Manager ###
 # check before salt and pepper is added
@@ -219,7 +236,7 @@ def register(username, master_password, email):
         return
     # uses argon2 to hash the master password
     hashed_master_password = ph.hash(master_password + salt + pepper)
-    user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt, 'email': email}
+    user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt, 'email': email, 'incorrect_attempts': 0}
     file_name = USER_FILE
     if os.path.exists(file_name) and os.path.getsize(file_name) == 0:
         with open(file_name, 'w') as file:
@@ -237,9 +254,16 @@ def login(username, entered_password):
         user_data = json.load(file)
     stored_password_hash = user_data.get('master_password')
     if verify_with_pepper(entered_password + user_data.get('salt'), stored_password_hash) and username == user_data.get('username'):
-        print("\n[+] Login Successful..\n")
+        if get_incorrect_attempts() >= 3 and not email_2fa_authentication():
+            print("\n[-] Invalid Login credentials. Please use the credentials you used to register.\n")
+            increment_incorrect_attempts()
+            sys.exit()
+        else:
+            print("\n[+] Login Successful..\n")
+            set_incorrect_attempts(0)
+        
     else:
-        incorrect_attempts = incorrect_attempts + 1
+        increment_incorrect_attempts()
         print("\n[-] Invalid Login credentials. Please use the credentials you used to register.\n")
         sys.exit()
 
@@ -377,4 +401,5 @@ while True:
    elif choice == '4':
        print('Email will be sent to address provided at registration')
        email_2fa_authentication()
+       # will need to either implement password changing here or leave it be
    
