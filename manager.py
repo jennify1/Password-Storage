@@ -215,9 +215,6 @@ def scan_passwords():
        print("\n[-] You have not saved any passwords!\n")
 
 
-
-
-
 # Registers the admin of this system and the master password
 def register(username, master_password, email):
     # Generate a salt to append
@@ -341,7 +338,7 @@ while True:
    print("1. Register")
    print("2. Login")
    print("3. Quit")
-   print("4. Forgot Password")
+#    print("4. Forgot Password")
    choice = input("Enter your choice: ")
    if choice == '1':  # If a user wants to register
        file = USER_FILE
@@ -398,8 +395,8 @@ while True:
                 break
    elif choice == '3':  # If a user wants to quit the program
        break
-   elif choice == '4':
-       print('Email will be sent to address provided at registration')
-       email_2fa_authentication()
+#    elif choice == '4':
+#        print('Email will be sent to address provided at registration')
+#        email_2fa_authentication()
        # will need to either implement password changing here or leave it be
    
