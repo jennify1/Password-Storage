@@ -93,6 +93,7 @@ def verify_with_pepper(entered_password, stored_password_hash):
     return False
 
 
+# generates TOTP and sends email to verify with user input
 def email_2fa_authentication():
     totp_secret = pyotp.random_base32()
     totp = pyotp.TOTP(totp_secret)
@@ -110,6 +111,7 @@ def email_2fa_authentication():
     else:
         return True
 
+# sends the email to the user_email with provided code
 def send_email(code):
     with open(USER_FILE, 'r') as file:
         user_data = json.load(file)
@@ -128,6 +130,7 @@ def send_email(code):
     s.quit()
 
 
+### Functions used to access and edit number of incorrect attempts ###
 def increment_incorrect_attempts():
     attempts = get_incorrect_attempts()
     set_incorrect_attempts(attempts + 1)
