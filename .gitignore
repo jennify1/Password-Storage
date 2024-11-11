@@ -1,3 +1,4 @@
 encryption_key.key
 *.json
 *.properties
+*.pem
