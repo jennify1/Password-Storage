@@ -4,7 +4,9 @@ from cryptography.fernet import Fernet
 from argon2 import PasswordHasher
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
-
+import pyotp
+import smtplib
+from email.message import EmailMessage
 
 ### Initialise a PasswordHasher using argon2 ###
 ph = PasswordHasher(time_cost=1, memory_cost=47104, parallelism=1, hash_len=32, salt_len=16, type=argon2.Type.ID)
@@ -18,6 +20,8 @@ PASSWORD_FILE = 'passwords.json'
 USER_FILE = 'user_data.json'
 PRIVATE = "private.pem"
 PUBLIC = "public.pem"
+
+incorrect_attempts = 0
 
 ## Asymmetric key encryption and decryption
 def generate_rsa_keys():
@@ -88,6 +92,42 @@ def verify_with_pepper(entered_password, stored_password_hash):
     return False
 
 
+def email_2fa_authentication():
+    totp_secret = pyotp.random_base32()
+    totp = pyotp.TOTP(totp_secret)
+    totp_code = totp.now()
+
+    # send the email containing this totp
+    send_email(totp_code)
+    user_code = input('Enter the code provided in your email: ')
+
+
+    if not totp.verify(user_code):
+        print('The code you provided was incorrect.')
+        return False
+    else:
+        print('Correct!')
+        return True
+
+def send_email(code):
+    with open(USER_FILE, 'r') as file:
+        user_data = json.load(file)
+    user_email = user_data.get('email')
+
+    msg = EmailMessage()
+    msg['Subject'] = 'Password Recovery Code'
+    msg['From'] = 'pasta6841word@gmail.com'
+    msg['To'] = user_email
+    msg.set_content(f'Hi,\nTo complete your login to the 6841 password manager please enter the following One-Time Password\nCode: {code}\n\nIf you did not attempt to log in please contact our support team immediately\n')
+    # Send the message via our own SMTP server.
+    s = smtplib.SMTP('smtp.gmail.com', 587)
+    s.starttls()
+    s.login('pasta6841word@gmail.com', 'lhim gfqt xmem ukng')
+    s.send_message(msg)
+    s.quit()
+
+
+### Features on Password Manager ###
 # check before salt and pepper is added
 def password_vulnerabilities_check(password):
     vulnerabilities = []
@@ -129,6 +169,7 @@ def password_warnings_check(password):
     return warnings
 
 
+
 def scan_passwords():
     try:
        with open(PASSWORD_FILE, 'r') as data:
@@ -156,9 +197,12 @@ def scan_passwords():
     except FileNotFoundError:
        print("\n[-] You have not saved any passwords!\n")
 
-### Features on Password Manager ###
+
+
+
+
 # Registers the admin of this system and the master password
-def register(username, master_password):
+def register(username, master_password, email):
     # Generate a salt to append
     salt = generate_salt()
     # Generate a pepper to append
@@ -175,7 +219,7 @@ def register(username, master_password):
         return
     # uses argon2 to hash the master password
     hashed_master_password = ph.hash(master_password + salt + pepper)
-    user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt}
+    user_data = {'username': username, 'master_password': hashed_master_password, 'salt' : salt, 'email': email}
     file_name = USER_FILE
     if os.path.exists(file_name) and os.path.getsize(file_name) == 0:
         with open(file_name, 'w') as file:
@@ -195,6 +239,7 @@ def login(username, entered_password):
     if verify_with_pepper(entered_password + user_data.get('salt'), stored_password_hash) and username == user_data.get('username'):
         print("\n[+] Login Successful..\n")
     else:
+        incorrect_attempts = incorrect_attempts + 1
         print("\n[-] Invalid Login credentials. Please use the credentials you used to register.\n")
         sys.exit()
 
@@ -272,6 +317,7 @@ while True:
    print("1. Register")
    print("2. Login")
    print("3. Quit")
+   print("4. Forgot Password")
    choice = input("Enter your choice: ")
    if choice == '1':  # If a user wants to register
        file = USER_FILE
@@ -280,12 +326,13 @@ while True:
            sys.exit()
        else:
             username = input("Enter your username: ")
+            user_email = input("Enter in your email: ")
             master_password = getpass.getpass("Enter your master password: ")
             password_match = getpass.getpass("Confirm your master password: ")
             if (master_password != password_match):
                print('\n[-] Passwords do not match. Please try again.\n')
             else:
-                register(username, master_password)
+                register(username, master_password, user_email)
    elif choice == '2':  # If a User wants to log in
        file = USER_FILE
        if os.path.exists(file):
@@ -327,4 +374,7 @@ while True:
                 break
    elif choice == '3':  # If a user wants to quit the program
        break
+   elif choice == '4':
+       print('Email will be sent to address provided at registration')
+       email_2fa_authentication()
    
