@@ -2,6 +2,8 @@ import argon2
 import json, getpass, os, pyperclip, sys, secrets, string
 from cryptography.fernet import Fernet
 from argon2 import PasswordHasher
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 
 
 ### Initialise a PasswordHasher using argon2 ###
@@ -14,26 +16,57 @@ character_set = string.ascii_letters + string.digits + string.punctuation
 ### File names as a constant ###
 PASSWORD_FILE = 'passwords.json'
 USER_FILE = 'user_data.json'
+PRIVATE = "private.pem"
+PUBLIC = "public.pem"
 
-### Encryption and Decryption ###
+## Asymmetric key encryption and decryption
+def generate_rsa_keys():
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public = private.public_key()
+    return private, public
 
-# Generates a secret key that can be used to encrypt password when added to the system and then decrypt when retrieving 
-def generate_key():
-   return Fernet.generate_key()
+def store_rsa_keys(private, public):
+    with open(PRIVATE, "wb") as f:
+        f.write(private.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
+    with open(PUBLIC, "wb") as f:
+        f.write(
+            public.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        )
 
-# Initialises a Fernet cipher using the provided key
-def initialize_cipher(key):
-   return Fernet(key)
+def extract_private_rsa_key():
+    with open(PRIVATE, "rb") as f:
+        return serialization.load_pem_private_key(f.read(), password=None)
 
+def extract_public_rsa_key():
+    with open(PUBLIC, "rb") as f:
+        return serialization.load_pem_public_key(f.read())
+    
+def decrypt_rsa_password(private, encrypted_password):
+    return private.decrypt(
+        encrypted_password,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    ).decode()
 
-# Encrypts a password using a provided cipher
-def encrypt_password(cipher, password):
-   return cipher.encrypt(password.encode()).decode()
-
-# Decrypts a password
-def decrypt_password(cipher, encrypted_password):
-   return cipher.decrypt(encrypted_password.encode()).decode()
-
+def encrypt_rsa_password(public, password):
+    return public.encrypt(
+        password.encode(),
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
 
 # Returns a string of a salt
 def generate_salt():
@@ -118,7 +151,8 @@ def scan_passwords():
                 print('\n')
             if len(set(passwords)) != len(passwords):
                 print("----Attention: two or more passwords are the same----")
-            print('\n')
+                print('\n')
+            print("Scan finished.")
     except FileNotFoundError:
        print("\n[-] You have not saved any passwords!\n")
 
@@ -180,16 +214,13 @@ def view_websites():
 
 # Load or generate the encryption key - if it is the first time, we generate and save key, otherwise just loads
 # the key here is the heart of program, where the vulnerability lies
-key_filename = 'encryption_key.key'
-if os.path.exists(key_filename):
-   with open(key_filename, 'rb') as key_file:
-       key = key_file.read()
+if os.path.exists(PRIVATE) and os.path.exists(PUBLIC):
+    private_key = extract_private_rsa_key()
+    public_key = extract_public_rsa_key()
 else:
-   key = generate_key()
-   with open(key_filename, 'wb') as key_file:
-       key_file.write(key)
+    private_key, public_key = generate_rsa_keys()
+    store_rsa_keys(private_key, public_key)
 
-cipher = initialize_cipher(key)
 
 # Function to add and save passwords tied to a particular website
 def add_password(website, password):
@@ -206,9 +237,9 @@ def add_password(website, password):
            # Handle the case where passwords.json is empty or invalid JSON.
            data = []
    # Encrypt the password
-   encrypted_password = encrypt_password(cipher, password)
+   encrypted_password = encrypt_rsa_password(public_key, password)
    # Create a dictionary to store the website and password
-   password_entry = {'website': website, 'password': encrypted_password}
+   password_entry = {'website': website, 'password': encrypted_password.hex()}
    data.append(password_entry)
    # Save the updated list back to passwords.json
    with open(PASSWORD_FILE, 'w') as file:
@@ -229,9 +260,10 @@ def get_password(website):
    # Loop through all the websites and check if the requested website exists.
    for entry in data:
        if entry['website'] == website:
-           # Decrypt and return the password
-           decrypted_password = decrypt_password(cipher, entry['password'])
-           return decrypted_password
+            # Decrypt and return the password
+            encrypted_password = bytes.fromhex(entry['password'])
+            decrypted_password = decrypt_rsa_password(private_key, encrypted_password)
+            return decrypted_password
    return None
 
 
